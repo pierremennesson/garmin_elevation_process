@@ -954,33 +954,65 @@ def realign_meta_segments_from_tree(shift_tree,meta_segments,min_components=1):
 
 #SUB-meta_segments PARTITION
 def get_cover(meta_segments,min_count=2):
+    """This function partitionate the big 
+    intervals on which the different are 
+    partially defined such that,for each 
+    sub_interval, at least min_count metasegments
+    will be defined on it. They will be the core
+    intervals on which we will estimate the
+    elevation profile.
+
+    Parameters
+    ----------
+
+    meta_segments : the meta segments
+
+    min_count : the minimum number of 
+    overlapping meta_segments over a interval
+    for it to be considered
+
+
+    Returns
+    -------
+
+    global_meta_segments_indexes  : a list of 
+    set of indexes such that global_meta_segments_indexes[i]
+    contains the indexes of overlapping curves for
+    extremities[i]
+
+    extremities : a list of tuple representing
+    intervals on which we have at least
+    min_count overlapping curves
+    
+
+    """
     starts=[(min(elem['X']),1,k) for k,elem in enumerate(meta_segments)]
     ends=[(max(elem['X']),-1,k) for k,elem in enumerate(meta_segments)]
     L=sorted(starts+ends,key=lambda x:x[0])
-    pts,moves,ids=zip(*L)
+    pts,moves,indexes_meta_segments=zip(*L)
     cover=False
-    l,L,extremities=set(),[],[]
+    current_meta_segments_indexes,global_meta_segments_indexes,extremities=set(),[],[]
     count=0
-    for k,id_metasegment in enumerate(ids):
+    for k,index_meta_segment in enumerate(indexes_meta_segments):
         if moves[k]==1:
-            l.add(id_metasegment)
+            current_meta_segments_indexes.add(index_meta_segment)
             count+=1
         else:
-            l.remove(id_metasegment)
+            current_meta_segments_indexes.remove(index_meta_segment)
             count-=1
         if count>=min_count:
             if not(cover):
                 cover=True
-                L.append(l.copy())
+                global_meta_segments_indexes.append(current_meta_segments_indexes.copy())
                 extremities.append([pts[k]])
             else:
-                if not(id_metasegment in L[-1]):
-                    L[-1].add(id_metasegment)
+                if not(index_meta_segment in global_meta_segments_indexes[-1]):
+                    global_meta_segments_indexes[-1].add(index_meta_segment)
         else:
             if cover:
                 extremities[-1].append(pts[k])
                 cover=False
-    return L,extremities
+    return global_meta_segments_indexes,extremities
 
 
 
