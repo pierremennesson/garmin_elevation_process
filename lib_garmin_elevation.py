@@ -120,7 +120,8 @@ def get_points_from_activity(file_path):
         data=gpx.tracks[0].segments[0].points
     except:
         data=gpx.waypoints
-    return gpd.GeoDataFrame([{'file_path':file_path,'geometry':Point(pt.longitude,pt.latitude),'elevation':pt.elevation,'time':pt.time} for pt in data],geometry='geometry',crs="EPSG:4326")
+    return gpd.GeoDataFrame([{'file_path':file_path,'geometry':Point(pt.longitude,pt.latitude),
+        'elevation':pt.elevation,'time':pt.time} for pt in data],geometry='geometry',crs="EPSG:4326")
 
 
 
@@ -391,11 +392,17 @@ def update_meta_segments(meta_segments,G_navigation,G_osm,edge,nodes_positions,
     nodes_positions : the x axis coordinates of the nodes on the path obtained by concatenating
     the edges of the path when appplying get_meta_segments_along_path
 
-    max_id_segment_gap : see update_meta_segment
+    max_id_segment_gap : maximum gap autorized between the id of the last component of a metasegment 
+    and the id of the segment comning from the edge to be merged. Ideally, consecutive segments along 
+    a path that should be merged have consecutive id segments but small projection errors can insert
+    small fake segments in between them.
 
-    max_time_gap : see update_meta_segment
+    max_time_gap : maximum time gap between the last point of a metasegment and the first point
+    of a segment for them to be merged
 
-    max_distance_gap : see update_meta_segment
+    max_distance_gap : maximum distance gap between the last point of a metasegment and the first point
+    of a segment for them to be merged
+
 
     Returns
     -------
@@ -421,7 +428,8 @@ def update_meta_segments(meta_segments,G_navigation,G_osm,edge,nodes_positions,
 
         for k,(X,Y,T,id_segment,file_path) in enumerate(zip(Xs,Ys,Ts,id_segments,file_paths)):
             if not(merged[k]):
-                meta_segments.append({'X':X+total_length,'Y':Y,'T':T,'first_id_segment':id_segment,'last_id_segment':id_segment,'file_path':file_path,'increasing':True})
+                meta_segments.append({'X':X+total_length,'Y':Y,'T':T,
+                    'first_id_segment':id_segment,'last_id_segment':id_segment,'file_path':file_path,'increasing':True})
 
     nodes_positions.append(total_length+length)
     return meta_segments,nodes_positions
@@ -460,7 +468,8 @@ def add_segment_to_meta_segment(meta_segment,X,Y,T,id_segment,file_path,total_le
     X=np.concatenate([meta_segment['X'],X+total_length])
     Y=np.concatenate([meta_segment['Y'],Y])
     T=np.concatenate([meta_segment['T'],T])
-    return {'X':X,'Y':Y,'T':T,'first_id_segment':meta_segment['first_id_segment'],'last_id_segment':id_segment,'file_path':file_path,'increasing':True}
+    return {'X':X,'Y':Y,'T':T,'first_id_segment':meta_segment['first_id_segment'],'last_id_segment':id_segment,
+    'file_path':file_path,'increasing':True}
 
 
 def non_max_suppression(meta_segments):
@@ -483,7 +492,8 @@ def non_max_suppression(meta_segments):
     keep=[True]*len(meta_segments)
     for (k1,meta_segment_1),(k2,meta_segment_2)  in combinations(enumerate(meta_segments),2):
         if keep[k1] and keep[k2] and meta_segment_1['file_path']==meta_segment_2['file_path']:
-            first_1,last_1,first_2,last_2=meta_segment_1['first_id_segment'],meta_segment_1['last_id_segment'],meta_segment_2['first_id_segment'],meta_segment_2['last_id_segment']
+            first_1,last_1=meta_segment_1['first_id_segment'],meta_segment_1['last_id_segment']
+            first_2,last_2= meta_segment_2['first_id_segment'],meta_segment_2['last_id_segment']
             if first_1<=first_2 and last_1>=last_2:
                 keep[k2]=False 
             if first_1>=first_2 and last_1<=last_2:
@@ -514,11 +524,17 @@ def get_meta_segments_along_path(path,G_navigation,G_osm,
 
     edge : an edge from G_navigation whose segments should be merged to the meta_segments 
 
-    max_id_segment_gap : see update_meta_segment
+    max_id_segment_gap : maximum gap autorized between the id of the last component of a metasegment 
+    and the id of the segment comning from the edge to be merged. Ideally, consecutive segments along 
+    a path that should be merged have consecutive id segments but small projection errors can insert
+    small fake segments in between them.
 
-    max_time_gap : see update_meta_segment
+    max_time_gap : maximum time gap between the last point of a metasegment and the first point
+    of a segment for them to be merged
 
-    max_distance_gap : see update_meta_segment
+    max_distance_gap : maximum distance gap between the last point of a metasegment and the first point
+    of a segment for them to be merged
+
 
     Returns
     -------
@@ -529,13 +545,13 @@ def get_meta_segments_along_path(path,G_navigation,G_osm,
     meta_segments_forwards,nodes_positions=[],[0]
     for edge in path:
         meta_segments_forwards,nodes_positions=update_meta_segments(meta_segments_forwards,G_navigation,G_osm,edge,nodes_positions,
-                                                             max_id_segment_gap=max_id_segment_gap,max_time_gap=max_time_gap,max_distance_gap=max_distance_gap)
+                                                     max_id_segment_gap=max_id_segment_gap,max_time_gap=max_time_gap,max_distance_gap=max_distance_gap)
 
     path=[(edge[1],edge[0],edge[2]) for edge in path[::-1]]
     meta_segments_backwards,reversed_nodes_positions=[],[0]
     for edge in path:
         meta_segments_backwards,reversed_nodes_positions=update_meta_segments(meta_segments_backwards,G_navigation,G_osm,edge,reversed_nodes_positions,
-                                                             max_id_segment_gap=max_id_segment_gap,max_time_gap=max_time_gap,max_distance_gap=max_distance_gap)
+                                                     max_id_segment_gap=max_id_segment_gap,max_time_gap=max_time_gap,max_distance_gap=max_distance_gap)
 
     tot_length=nodes_positions[-1]
     for elem in meta_segments_backwards:
@@ -756,7 +772,8 @@ def normalized_correlation(meta_segment_1,meta_segment_2,k_max):
 
     """
     Y1,Y2=meta_segment_1['Y_harmonized'],meta_segment_2['Y_harmonized']
-    k1_min,k1_max,k2_min,k2_max=meta_segment_1['k_min_har'],meta_segment_1['k_max_har'],meta_segment_2['k_min_har'],meta_segment_2['k_max_har']
+    k1_min,k1_max=meta_segment_1['k_min_har'],meta_segment_1['k_max_har']
+    k2_min,k2_max=meta_segment_2['k_min_har'],meta_segment_2['k_max_har']
     Y1,Y2=Y1[max(k1_min,k2_min):min(k1_max,k2_max)],Y2[max(k1_min,k2_min):min(k1_max,k2_max)]
     k_max=min(k_max,len(Y1)//2)
     correlations=[]
@@ -810,7 +827,9 @@ def is_quasi_affine(meta_segment,affine_threshold=2.5):
     return np.mean(np.abs(Y-Y_aff))<affine_threshold
 
 
-def get_shift(meta_segment_1,meta_segment_2,harmonizing_step=5.,max_shift_value=500.,overlay_threshold=0.25):
+def get_shift(meta_segment_1,meta_segment_2,
+              harmonizing_step=5.,max_shift_value=500.,
+              overlay_threshold=0.25):
     """This function computes the shift in the x-axis between meta_segment_1 and meta_segment_2, 
     in the sense that adding this shift to the x coordinates of the meta_segments_1 points yields 
     a curve aligned with the one from meta_segments_2
@@ -852,7 +871,7 @@ def get_shift(meta_segment_1,meta_segment_2,harmonizing_step=5.,max_shift_value=
     return overlay_1,overlay_2,shift,np.max(corr)
 
 
-def get_pairwise_shifts(meta_segments,overlay_threshold=0.25):
+def get_pairwise_shifts(meta_segments,overlay_threshold=0.25,affine_threshold=2.5):
     """This function computes the shift between all pairs of meta_segments
 
     Parameters
@@ -860,7 +879,12 @@ def get_pairwise_shifts(meta_segments,overlay_threshold=0.25):
 
     meta_segments : the metasegments
 
-    overlay_thresh : see get_shift
+    overlay_threshold : the minimum overlapping ratio between the two meta_segments for the computation
+    to happen. Metasegments merely overlapping can not be truthfuly realigned and we want to avoid
+    useless computations.
+
+    affine_threshold : a metasegment is considered quasi-affine if its mean distance from its affine 
+    interpolation is below this threshold
 
 
     Returns
@@ -873,7 +897,7 @@ def get_pairwise_shifts(meta_segments,overlay_threshold=0.25):
     affine_meta_segments=[]
     N=len(meta_segments)
     for k in range(N):
-        if is_quasi_affine(meta_segments[k]):
+        if is_quasi_affine(meta_segments[k],affine_threshold=affine_threshold):
             affine_meta_segments.append(k)
     pairwise_shifts={}
     for k1,k2 in combinations(set(range(N))-set(affine_meta_segments),2):
@@ -891,7 +915,7 @@ def get_shifts_graph(pairwise_shifts,correlation_treshold=0.9):
 
     pairwise_shifts : the shifts between pairs of metasegments
 
-    correlation_treshold=0.9 : a shift computed with a correlation above this threshold
+    correlation_treshold : a shift computed with a correlation above this threshold
     will generate an edge between two metasegments
 
 
@@ -911,7 +935,7 @@ def get_shifts_graph(pairwise_shifts,correlation_treshold=0.9):
 
 
 
-def realign_meta_segments_from_tree(shift_tree,meta_segments,min_components=1):
+def realign_meta_segments_from_tree(shift_tree,meta_segments,min_tree_components=1):
     """This function realign each slopes by computing the estimating the absolute shift
     i.e. x axis error as the mean of its relative shifts with all other nodes (see documentation).
 
@@ -923,7 +947,7 @@ def realign_meta_segments_from_tree(shift_tree,meta_segments,min_components=1):
 
     meta_segments : the meta_segments to be realigned
 
-    min_components : the minimum size of a connected component in the shift tree 
+    min_tree_components : the minimum size of a connected component in the shift tree 
     to estimate the absolute shift. If the size of the component is lower than
     this value, the underlying curves are discarded
 
@@ -939,20 +963,21 @@ def realign_meta_segments_from_tree(shift_tree,meta_segments,min_components=1):
     tree_un=nx.Graph(shift_tree)
     for cc in nx.connected_components(tree_un):
         N=len(cc)
-        if N>=min_components:
+        if N>=min_tree_components:
             all_paths=nx.shortest_path(nx.subgraph(tree_un,cc))
             for node,paths in all_paths.items():
                 absolute_shift=0
                 for path in paths.values():
                     absolute_shift-=sum([shift_tree.get_edge_data(path[i],path[i+1])['shift'] for i in range(len(path)-1)])
                 absolute_shift/=N
-                meta_segments[node].update({'X':meta_segments[node]['X']-absolute_shift,'x_min':meta_segments[node]['x_min']-absolute_shift,'x_max':meta_segments[node]['x_max']-absolute_shift})
+                meta_segments[node].update({'X':meta_segments[node]['X']-absolute_shift,
+                    'x_min':meta_segments[node]['x_min']-absolute_shift,'x_max':meta_segments[node]['x_max']-absolute_shift})
                 corrected_meta_segments.append(meta_segments[node])
     return corrected_meta_segments
 
 
 
-#SUB-meta_segments PARTITION
+#SUB-METASEGMENTS PARTITION
 def get_cover(meta_segments,min_count=2):
     """This function partitionate the big 
     intervals on which the different are 
@@ -1017,16 +1042,33 @@ def get_cover(meta_segments,min_count=2):
 
 
 
-#ELEVATION DATA COLLECTION
+#ESTIMATE ELEVATION PROFILE
 
-####HANDLE INTERPOLATION DIST
-def get_intermediate_elevation(intermediate_points,sub_meta_segments,max_interpolation_dist=100):
+def get_intermediate_elevation(intermediate_points,meta_segments):
+    """This function computes the intermediate elevations at some
+    chosen intermediate points by computing the median of the metasegments
+
+    Parameters
+    ----------
+
+    intermediate_points : the x-axis of the points to be evaluated
+
+    meta_segments : the meta segments 
+
+
+
+    Returns
+    -------
+
+    median elevations    
+
+    """
     intermediate_elevations=[]
     for k,pos in enumerate(intermediate_points):
         intermediate_elevations.append([])
-        for j,metasegment in enumerate(sub_meta_segments):
-            if metasegment['x_min']<pos<metasegment['x_max']:
-                X,Y=metasegment['X'],metasegment['Y']
+        for j,meta_segment in enumerate(meta_segments):
+            if meta_segment['x_min']<pos<meta_segment['x_max']:
+                X,Y=meta_segment['X'],meta_segment['Y']
                 index=np.where(X<pos)[0][-1]
                 x1,y1,x2,y2=X[index],Y[index],X[index+1],Y[index+1]
                 y=affine(x1,x2,y1,y2)(pos)
@@ -1034,24 +1076,55 @@ def get_intermediate_elevation(intermediate_points,sub_meta_segments,max_interpo
     return intermediate_elevations
 
 
-def clean_signal(X,Y,grad_thresh=1.):
-    dYdX=np.diff(Y)/np.diff(X)
-    pre_indexes=np.where(np.abs(dYdX)<=grad_thresh)[0]
-    indexes=list(sorted(set(pre_indexes).intersection(pre_indexes+1)))
-    return X[indexes],Y[indexes]
+# def clean_signal(X,Y,grad_thresh=1.):
+#     dYdX=np.diff(Y)/np.diff(X)
+#     pre_indexes=np.where(np.abs(dYdX)<=grad_thresh)[0]
+#     indexes=list(sorted(set(pre_indexes).intersection(pre_indexes+1)))
+#     return X[indexes],Y[indexes]
 
 
-def approximate_derivative(meta_segments,x_min=None,x_max=None,min_samples_leaf=50,min_impurity_decrease=0.5*float('1e-6'),criterion='squared_error'):
+def approximate_derivative(meta_segments,x_min=None,x_max=None,
+                           min_samples_leaf=25,min_impurity_decrease=0.5*float('1e-6')):
+    """This function approximates the derivative of the elevation profile.
+    We compute the pointwise derivative for each metasegment, combine them all together
+    and sort them by the x coordinates and feed them to a decision tree regressor.
+
+
+    Parameters
+    ----------
+
+    meta_segments : the metasegments
+
+    x_min : the start of the interval on which we estimate the elevation profile
+
+    x_max : the end of the interval on which we estimate the elevation profile
+
+    min_samples_leaf : min_samplees_leaf for the DecisionTreeRegressor object
+
+    min_impurity_decrease : min_impurity_decrease for the DecisionTreeRegressor object
+
+
+
+    Returns
+    -------
+
+    X : the x coordinates of the derivatives
+
+    dYdX : the value of the derivatives
+
+    model : the trained DecisionTreeRegressor object    
+
+    """
     all_derivatives=[]
-    for k,metasegment in enumerate(meta_segments):
-        X,Y=metasegment['X'],metasegment['Y']
+    for k,meta_segment in enumerate(meta_segments):
+        X,Y=meta_segment['X'],meta_segment['Y']
         if x_min is not None:
             indexes=np.where(X>=x_min)[0]
             X,Y=X[indexes],Y[indexes]
         if x_max is not None:
             indexes=np.where(X<=x_max)[0]
             X,Y=X[indexes],Y[indexes]
-        X,Y=clean_signal(X,Y,grad_thresh=1.)
+        # X,Y=clean_signal(X,Y,grad_thresh=1.)
         dX=np.diff(X)
         indexes=np.where(dX!=0.)[0]
         dYdX=np.diff(Y)[indexes]/dX[indexes]
@@ -1062,12 +1135,29 @@ def approximate_derivative(meta_segments,x_min=None,x_max=None,min_samples_leaf=
         return None
     X,dYdX=list(zip(*all_derivatives))
     X,dYdX=np.array(X),np.array(dYdX)
-    model=DecisionTreeRegressor(min_samples_leaf=min_samples_leaf,min_impurity_decrease=min_impurity_decrease,criterion=criterion)
+    model=DecisionTreeRegressor(min_samples_leaf=min_samples_leaf,min_impurity_decrease=min_impurity_decrease)
     model.fit(X.reshape(-1,1),dYdX)
     return X,dYdX,model
 
 
 def get_derivative_intervals(tree,node=0):
+    """This function extracts the tree information
+    in a more intelligible way that is the list of
+    intervals on which the approximate derivative is 
+    constant along with the value.
+
+    Parameters
+    ----------
+
+    tree : the tree from the DecisionTreeRegressor object
+
+    Returns
+    -------
+
+    a list of triplets (x1,x2,v) meaning that the approximate derivative is constant 
+    on the intervals [x1,x2] with value v 
+
+    """
     if tree.feature[node] == _tree.TREE_UNDEFINED:
         return [[-np.inf,np.inf,tree.value[node][0][0]]]
     else:
@@ -1077,18 +1167,44 @@ def get_derivative_intervals(tree,node=0):
         res_2[0][0]=threshold
         return res_1+res_2
 
-def simplify_tree(tree,x_min,x_max,min_interval=100,node=0):
-    if tree.feature[node] == _tree.TREE_UNDEFINED or x_max-x_min<min_interval:
+def simplify_tree(tree,x_min,x_max,min_interval_size=100,node=0):
+    """This function simplifies the elevation profile estimated by the tree, 
+    in the sense that the intervals on which it is constant should not be 
+    bigger than min_interval_size. We don't want a model learning really
+    small details that are likely to be some noise.
+
+
+    Parameters
+    ----------
+
+    tree : the tree from the DecisionTreeRegressor object
+
+    x_min : the start of the interval on which we estimate the elevation profile
+
+    x_max : the end of the interval on which we estimate the elevation profile
+
+    min_interval_size : the minimum size of an interval for the estimated derivative
+    to be constant on it.
+
+    Returns
+    -------
+
+    a list of triplets (x1,x2,v) meaning that the approximate derivative is constant 
+    on the intervals [x1,x2] with value v 
+
+    """
+    if tree.feature[node] == _tree.TREE_UNDEFINED or x_max-x_min<min_interval_size:
         return [[x_min,x_max,tree.value[node][0][0]]]
     else:
         threshold = tree.threshold[node]
-        res_1,res_2=simplify_tree(tree,x_min,threshold,min_interval=min_interval,node=tree.children_left[node]),simplify_tree(tree,threshold,x_max,min_interval=min_interval,node=tree.children_right[node])
-        if threshold-x_min<min_interval/2:
+        res_1=simplify_tree(tree,x_min,threshold,min_interval_size=min_interval_size,node=tree.children_left[node])
+        res_2=simplify_tree(tree,threshold,x_max,min_interval_size=min_interval_size,node=tree.children_right[node])
+        if threshold-x_min<min_interval_size/2:
             (x1,x2,v1),(xx1,xx2,v2)=res_1[-1],res_2[0]
             v=(v1*(x2-x1)+v2*(xx2-xx1))/(xx2-x1)
             res_2[0]=[x1,xx2,v]
             return res_2
-        elif x_max-threshold<min_interval/2:
+        elif x_max-threshold<min_interval_size/2:
             (x1,x2,v1),(xx1,xx2,v2)=res_1[-1],res_2[0]
             v=(v1*(x2-x1)+v2*(xx2-xx1))/(xx2-x1)
             res_1[-1]=[x1,xx2,v]
@@ -1098,64 +1214,184 @@ def simplify_tree(tree,x_min,x_max,min_interval=100,node=0):
 
 
 
+def adjust_curve_elevation(Y,delta_expected):
+    """This function perturbates a curve Y 
+    represented by a sequence of elevation values
+    so that the resulting curve is close to Y
+    but have an elevation difference between the
+    last and first point equal to the expected
+    elevation difference delta_expected.
 
 
-def approximate_metasegment(sub_meta_segments,x_min,x_max,intermediate_distance=1000):
+    Parameters
+    ----------
+
+    Y : the curve to be corrected
+
+    delta_expected : the expected elevation difference
+
+
+    Returns
+    -------
+
+    the perturbated curve
+
+    """
+    dY=np.diff(Y)
+    dY_pos=np.where(dY>=0,dY,0)
+    dY_neg=np.where(dY<0,-dY,0)
+    delta_pos,delta_neg=np.sum(dY_pos),np.sum(dY_neg)
+    alpha=alpha=(delta_expected-(delta_pos-delta_neg))/(delta_pos+delta_neg)
+    dY=(1+alpha)*dY_pos-(1-alpha)*dY_neg
+    Y_corr=np.insert(np.cumsum(dY),0,0)
+    return Y_corr+Y[0],delta_pos-delta_neg
+
+def infer_curve_from_estimated_gradient(intervals,init_elevation=0):
+    """This function integrates the piecewise constant derivate
+    encoded by the intervals starting at init_elevation
+
+
+    Parameters
+    ----------
+
+    intervals : a sequence of triplets (x1,x2,v) modelizing
+    the derivate as a piecewise constant function which equals
+    to v on [x1,x2].
+
+    init_elevation : the starting elevation
+
+
+    Returns
+    -------
+
+    the integrated curve
+
+    """
+    X,Y=[],[init_elevation]
+    for x1,x2,alpha in intervals :
+        X.append(x1)
+        delta=(x2-x1)
+        Y.append(Y[-1]+alpha*delta)
+    X.append(x2)
+    return X,Y
+
+def approximate_elevation_profile(meta_segments,x_min,x_max,
+                                 intermediate_distance=1000,min_interval_size=100,
+                                 min_samples_leaf=25,min_impurity_decrease=0.25*float('1e-6')):
+
+    """This function estimates the elevation profile on the [x_min,x_max] intervals
+    through the metasegments, it combines a pointwise estimation of some intermediate points
+    at some  by computing the median and an estimation of the derivative between those 
+    intermediate points.
+
+
+    Parameters
+    ----------
+
+    meta_segments : the metasegments
+
+    x_min : the start of the interval on which we estimate the elevation profile
+
+    x_max : the end of the interval on which we estimate the elevation profile
+
+    intermediate_distance : the distance used to sampled intermediate points at which
+    we compute the median elevations. The greater it is, the more the final curve will
+    be more C0 close but less C1 close to the real elevation profile.
+
+    min_interval_size : the minimum size of an interval for the estimated derivative
+    to be constant on it.
+
+    min_samples_leaf : min_samplees_leaf for the DecisionTreeRegressor object
+
+    min_impurity_decrease : min_impurity_decrease for the DecisionTreeRegressor object
+
+
+    Returns
+    -------
+
+    the integrated curve
+
+    """
+
     intermediate_points=np.linspace(x_min,x_max,max(round((x_max-x_min)/intermediate_distance)+1,2))
-    intermediate_elevations=get_intermediate_elevation(intermediate_points,sub_meta_segments)
-    output=approximate_derivative(sub_meta_segments,x_min=x_min,x_max=x_max,min_samples_leaf=25,min_impurity_decrease=0.25*float('1e-6'))
+    intermediate_elevations=get_intermediate_elevation(intermediate_points,meta_segments)
+    output=approximate_derivative(meta_segments,x_min=x_min,x_max=x_max,
+                                  min_samples_leaf=min_samples_leaf,
+                                  min_impurity_decrease=min_impurity_decrease)
     if output is None:
         return None
     _,_,model=output
-    intervals=simplify_tree(model.tree_,x_min,x_max,min_interval=100.)
+    intervals=simplify_tree(model.tree_,x_min,x_max,min_interval_size=min_interval_size)
     X,Y=[],[]
     for k in range(len(intermediate_points)-1):
-        sub_intervals=[[min(max(x1,intermediate_points[k]),intermediate_points[k+1]),min(max(x2,intermediate_points[k]),intermediate_points[k+1]),v] for x1,x2,v in intervals if x2>=intermediate_points[k] and x1<=intermediate_points[k+1]]
+        sub_intervals=[[min(max(x1,intermediate_points[k]),intermediate_points[k+1]),min(max(x2,intermediate_points[k]),intermediate_points[k+1]),v] 
+                                        for x1,x2,v in intervals if x2>=intermediate_points[k] and x1<=intermediate_points[k+1]]
         x,y=infer_curve_from_estimated_gradient(sub_intervals,np.nanmedian(intermediate_elevations[k]))
         delta_expected=np.nanmedian(intermediate_elevations[k+1])-np.nanmedian(intermediate_elevations[k])
         y,_=adjust_curve_elevation(y,delta_expected)
-        X+=x
-        Y+=list(y)
+        X+=x[:-1]
+        Y+=list(y[:-1])
     X.append(x[-1])
     Y.append(y[-1])
     return X,Y
 
-
-# def collect_elevation_information_from_sub_meta_segments(path,nodes_positions,sub_meta_segments,x_min,x_max):
-#     nodes=[edge[0] for edge in path]+[path[-1][1]]
-#     nodes_data,edges_data={},{}
-
-#     output=approximate_metasegment(sub_meta_segments,x_min,x_max)
-#     if output is not None:
-#         X,Y=output
-
-#         _,_,nodes_elevations=get_piecewise(nodes_positions,X,Y,x_min,x_max)
-#         for k,elev in enumerate(nodes_elevations):
-#             if elev==elev:
-#                 if not(nodes[k] in nodes_data.keys()):
-#                     nodes_data[nodes[k]]=[]
-#                 nodes_data[nodes[k]].append(elev)
+#ELEVATION DATA RETRIEVAL
 
 
-        # all_points=[[pos,nodes_elevations[k],k] for k,pos in enumerate(nodes_positions)]+[[x,y,-1] for x,y in zip(X,Y)]
-        # all_points=sorted(all_points,key=lambda x:x[0])
-        # all_points=np.array(all_points)
-        # for k,edge in enumerate(path):
-        #     if nodes_elevations[k]==nodes_elevations[k] and nodes_elevations[k+1]==nodes_elevations[k+1]:
-        #         k1,k2=np.where(all_points[:,2]==k)[0][0],np.where(all_points[:,2]==k+1)[0][0]
-        #         x=all_points[k1:k2+1,0]-all_points[k1,0]
-        #         y=all_points[k1:k2+1,1]
-        #         if not(edge in edges_data.keys()):
-        #             edges_data[edge]=[]
-        #         edges_data[edge].append({'X':x,'Y':y})
 
-#         return nodes_data,edges_data
+def collect_elevation_information_from_sub_meta_segments(path,nodes_positions,meta_segments,x_min,x_max,
+                                                         intermediate_distance=1000,min_interval_size=100,
+                                                         min_samples_leaf=25,min_impurity_decrease=0.25*float('1e-6')):
 
-def collect_elevation_information_from_sub_meta_segments(path,nodes_positions,sub_meta_segments,x_min,x_max):
+    """This function retrieves nodes and edges elevation data along a the portion of the path comprised between x_min and x_max
+    in the navigation graph.
+    Given a path, we estimate the elevation profile. Knowing the nodes positions (their x-axis coordinates along the road), 
+    we can evaluate the elevation profile curve at these points to estimate the nodes elevations and also look at the restriction 
+    of the elevation profile between two successive nodes to get a elevation profile for the edge joining them.
+
+
+    Parameters
+    ----------
+
+    path : a path in the navigation graph, i.e. a list of edges
+
+    nodes_positions : the x axis of the nodes
+
+    meta_segments : the metasegments obtained along the path
+
+    x_min : the start of the interval on which we estimate the elevation profile
+
+    x_max : the end of the interval on which we estimate the elevation profile
+
+    intermediate_distance : the distance used to sampled intermediate points at which
+    we compute the median elevations. The greater it is, the more the final curve will
+    be more C0 close but less C1 close to the real elevation profile.
+
+    min_interval_size : the minimum size of an interval for the estimated derivative
+    to be constant on it.
+
+    min_samples_leaf : min_samplees_leaf for the DecisionTreeRegressor object
+
+    min_impurity_decrease : min_impurity_decrease for the DecisionTreeRegressor object
+
+    Returns
+    -------
+
+    nodes_data : a dictionary whose keys are nodes and values are lists of the
+    different median elevations computed
+
+    edges_data : a dictionary whose keys are edges and values are lists of (possibly partial)
+    elevations profiles computed
+
+    """
+
+
     nodes=[edge[0] for edge in path]+[path[-1][1]]
     nodes_data,edges_data={},{}
 
-    output=approximate_metasegment(sub_meta_segments,x_min,x_max)
+    output=approximate_elevation_profile(meta_segments,x_min,x_max,
+                                         intermediate_distance=intermediate_distance,min_interval_size=min_interval_size,
+                                         min_samples_leaf=min_samples_leaf,min_impurity_decrease=min_impurity_decrease)
     if output is not None:
         X,Y=output
         X,Y=np.array(X),np.array(Y)
@@ -1186,52 +1422,116 @@ def collect_elevation_information_from_sub_meta_segments(path,nodes_positions,su
         return nodes_data,edges_data
 
 
-def collect_elevation_data_from_path(G_navigation,G_proj,path):
-    meta_segments,nodes_positions=get_meta_segments_along_path(path[:],G_navigation,G_proj)
-    meta_segments=split_meta_segments(meta_segments)
+def collect_elevation_data_from_path(G_navigation,G_osm,path,
+                                    max_id_segment_gap=2,max_time_gap=100.,max_distance_gap=250.,
+                                    max_delta_T=900,overlap_coeff=0.,harmonizing_step=5.,
+                                    discarding_threshold=30.,overlay_threshold=0.25,affine_threshold=2.5,
+                                    correlation_treshold=0.95,min_tree_components=1,min_count=1,
+                                    intermediate_distance=1000,min_interval_size=100.,
+                                    min_samples_leaf=25.,min_impurity_decrease=0.25*float('1e-6')):
+
+    """This function retrieves nodes and edges elevation data along the path in the navigation graph.
+    Given a path, we estimate the elevation profile. After retrieving the metasegments, processing them and
+    aligning them, we split the intervals into sub intervals upon which one has enough data to estimate
+    the elevation profile.
+
+    Parameters
+    ----------
+
+    G_navigation : the mutlidigraph containing the navigation data
+
+    G_osm : an osm graph, used to access the length of the edge's geometry
+
+    path : a path in the navigation graph, i.e. a list of edges
+
+    max_id_segment_gap : maximum gap autorized between the id of the last component of a metasegment and the 
+    id of the segment comning from the edge to be merged. Ideally, consecutive segments along a path that should 
+    be merged have consecutive id segments but small projection errors can insert small fake segments in between them.
+
+    max_time_gap : maximum time gap between the last point of a metasegment and the first point
+    of a segment for them to be merged
+
+    max_distance_gap : maximum distance gap between the last point of a metasegment and the first point
+    of a segment for them to be merged
+
+    max_delta_T : the maximum time amplitude accepted for a metasegment
+
+    overlap_coeff : splitted curves are extended in time by overlap_coeff*max_delta_T
+
+    harmonizing_step : the step between consecutive x axis points in the common X_harmonized coordinates system. 
+    The greater it is, the faster and less acurrate the shifts computations will be.
+
+    discarding_threshold : the mean distance from the median metasegment above which a metasegment is discarded
+
+    overlay_threshold : the minimum overlapping ratio between the two meta_segments for the computation to happen. 
+    Metasegments merely overlapping can not be truthfuly realigned and we want to avoid useless computations.
+
+    affine_threshold : a metasegment is considered quasi-affine if its mean distance from its affine interpolation is below this threshold
+
+    correlation_treshold=0.9 : a shift computed with a correlation above this threshold will generate an edge between two metasegments
+
+    min_tree_components : the minimum size of a connected component in the shift tree to estimate the absolute shift. 
+    If the size of the component is lower than this value, the underlying curves are discarded
+
+    min_count : the minimum number of overlapping meta_segments over a intervalfor it to be considered
+
+
+    intermediate_distance : the distance used to sampled intermediate points at which we compute the median elevations. 
+    The greater it is, the more the final curve will be more C0 close but less C1 close to the real elevation profile.
+
+    min_interval_size : the minimum size of an interval for the estimated derivative
+    to be constant on it.
+
+    min_samples_leaf : min_samplees_leaf for the DecisionTreeRegressor object
+
+    min_impurity_decrease : min_impurity_decrease for the DecisionTreeRegressor object
+
+    Returns
+    -------
+
+    nodes_data : a dictionary whose keys are nodes and values are lists of the
+    different median elevations computed
+
+    edges_data : a dictionary whose keys are edges and values are lists of (possibly partial)
+    elevations profiles computed
+
+    """
+
+
+
+
+    meta_segments,nodes_positions=get_meta_segments_along_path(path,G_navigation,G_osm,
+                                  max_id_segment_gap=max_id_segment_gap,max_time_gap=max_time_gap,
+                                  max_distance_gap=max_distance_gap)
+
+    meta_segments=split_meta_segments(meta_segments,max_delta_T=max_delta_T,overlap_coeff=overlap_coeff)
     if len(meta_segments)>0:
-        meta_segments=harmonize_meta_segments(meta_segments)
+        meta_segments=harmonize_meta_segments(meta_segments,harmonizing_step=harmonizing_step)
         if len(meta_segments)>0:
-            meta_segments=discard_outliers(meta_segments)
+            meta_segments=discard_outliers(meta_segments,discarding_threshold=discarding_threshold)
             if len(meta_segments)>0:
-                pairwise_shifts,affine_meta_segments=get_pairwise_shifts(meta_segments,overlay_thresh=0.25,)
-                shift_G=get_shifts_graph(pairwise_shifts,correlation_tresh=0.99)
+                pairwise_shifts,affine_meta_segments=get_pairwise_shifts(meta_segments,overlay_threshold=overlay_threshold,affine_threshold=affine_threshold)
+                shift_G=get_shifts_graph(pairwise_shifts,correlation_treshold=correlation_treshold)
                 edges=list(nx.minimum_spanning_edges(nx.Graph(shift_G),weight='weight',data=False))
                 edges+=[(v,u) for u,v in edges]
                 shift_tree=nx.edge_subgraph(shift_G,edges)
-                corrected_meta_segments=realign_meta_segments_from_tree(shift_tree,meta_segments,min_components=1)
+                corrected_meta_segments=realign_meta_segments_from_tree(shift_tree,meta_segments,min_tree_components=min_tree_components)
                 corrected_meta_segments+=[meta_segments[k] for k in affine_meta_segments]
                 if len(corrected_meta_segments)>0:
-                    cover,extremities=get_cover(corrected_meta_segments,min_count=2)
+                    cover,extremities=get_cover(corrected_meta_segments,min_count=min_count)
                     all_nodes_data,all_edges_data={},{}
                     for i,(x_min,x_max) in enumerate(extremities):
                         sub_meta_segments=[corrected_meta_segments[k] for k in cover[i]]
-                        output=collect_elevation_information_from_sub_meta_segments(path,nodes_positions,sub_meta_segments,x_min,x_max)
+                        output=collect_elevation_information_from_sub_meta_segments(path,nodes_positions,meta_segments,x_min,x_max,
+                                                         intermediate_distance=intermediate_distance,min_interval_size=min_interval_size,
+                                                         min_samples_leaf=min_samples_leaf,min_impurity_decrease=min_impurity_decrease)
                         if output is not None:
                             nodes_data,edges_data=output
                             all_nodes_data.update(nodes_data)
                             all_edges_data.update(edges_data)
                     return all_nodes_data,all_edges_data
 
-#COMBINING POINT AND DERIVATIVE ESTIMATES
-def adjust_curve_elevation(Y,delta_expected):
-    dY=np.diff(Y)
-    dY_pos=np.where(dY>=0,dY,0)
-    dY_neg=np.where(dY<0,-dY,0)
-    delta_pos,delta_neg=np.sum(dY_pos),np.sum(dY_neg)
-    alpha=alpha=(delta_expected-(delta_pos-delta_neg))/(delta_pos+delta_neg)
-    dY=(1+alpha)*dY_pos-(1-alpha)*dY_neg
-    Y_corr=np.insert(np.cumsum(dY),0,0)
-    return Y_corr+Y[0],delta_pos-delta_neg
 
-def infer_curve_from_estimated_gradient(intervals,init_elev=0):
-    X,Y=[],[init_elev]
-    for x1,x2,alpha in intervals :
-        X.append(x1)
-        delta=(x2-x1)
-        Y.append(Y[-1]+alpha*delta)
-    X.append(x2)
-    return X,Y
 
 
 
@@ -1240,21 +1540,91 @@ def infer_curve_from_estimated_gradient(intervals,init_elev=0):
     
 #GRAPH DECOMPOSITION
 
-def pre_edge_score(G_navigation,edge_1,edge_2,max_index_gap=3):
+def pre_edge_score(G_navigation,edge_1,edge_2,max_id_segment_gap=3):
+    """This function associates a pre_score to a pair of edges in the
+    dual graph. The pre_score measures the number of activites for which 
+    subsequent segments are likely to be merged in the get_meta_segments_along_path
+    function when one crosses the oriented duel edge (edge_1,edge_2).
+
+
+    Parameters
+    ----------
+
+    G_navigation : the mutlidigraph containing the navigation data
+
+    edge_1 : first edge
+
+    edge_2 : second edge
+
+    max_id_segment_gap : maximum gap autorized between the id of the last 
+    component of a metasegment and the id of the segment comning from the edge to be merged. 
+    Ideally, consecutive segments along a path that should be merged have 
+    consecutive id segments but small projection errors can insert small fake segments in between them.
+
+    Returns
+    -------
+
+    the pre_score between edges
+
+    """
     if not(edge_1 in G_navigation.edges(keys=True) and edge_2 in G_navigation.edges(keys=True)):
         return 0.
     datum_1,datum_2=G_navigation.get_edge_data(*edge_1),G_navigation.get_edge_data(*edge_2)
     L1=zip(datum_1['file_paths'],datum_1['id_segments'])
     L2=zip(datum_2['file_paths'],datum_2['id_segments'])
-    return len(set([file_path_2 for (file_path_1,id_segment_1),(file_path_2,id_segment_2) in product(L1,L2) if file_path_1==file_path_2 and id_segment_1+1<=id_segment_2<=id_segment_1+max_index_gap]))
+    return len(set([file_path_2 for (file_path_1,id_segment_1),(file_path_2,id_segment_2) in product(L1,L2) if file_path_1==file_path_2 and id_segment_1+1<=id_segment_2<=id_segment_1+max_id_segment_gap]))
 
 
 
-def edge_score(G_navigation,edge_1,edge_2,max_index_gap=3):
-    return max(pre_edge_score(G_navigation,edge_1,edge_2,max_index_gap=max_index_gap),pre_edge_score(G_navigation,(edge_2[1],edge_2[0],edge_2[2]),(edge_1[1],edge_1[0],edge_1[2]),max_index_gap=max_index_gap))
+def edge_score(G_navigation,edge_1,edge_2,max_id_segment_gap=3):
+    """This function associates a score to a pair of edges by 
+    computing the maximum of the pre_score between (edge_1,edge_2)
+    and (edge_2,edge_1)
+
+    Parameters
+    ----------
+
+    G_navigation : the mutlidigraph containing the navigation data
+
+    edge_1 : first edge
+
+    edge_2 : second edge
+
+    max_id_segment_gap : maximum gap autorized between the id of the last 
+    component of a metasegment and the id of the segment comning from the edge to be merged. 
+    Ideally, consecutive segments along a path that should be merged have 
+    consecutive id segments but small projection errors can insert small fake segments in between them.
+
+    Returns
+    -------
+
+    the score between edges
+
+    """
+    return max(pre_edge_score(G_navigation,edge_1,edge_2,max_id_segment_gap=max_id_segment_gap),
+               pre_edge_score(G_navigation,(edge_2[1],edge_2[0],edge_2[2]),(edge_1[1],edge_1[0],edge_1[2]),max_id_segment_gap=max_id_segment_gap))
 
 
 def build_dual_graph(G_navigation):
+    """This function computes the 
+    dual graph of the navigation graph.
+    The dual edges between two opposite
+    edges are removed not to go backwards
+    when generating a path in the dual graph.
+
+
+    Parameters
+    ----------
+
+    G_navigation : the mutlidigraph containing the navigation data
+
+
+    Returns
+    -------
+
+    the dual graph
+
+    """
     dual_G=nx.line_graph(G_navigation)
     dual_G=nx.DiGraph(dual_G)
     to_be_removed=[]
@@ -1270,6 +1640,24 @@ def build_dual_graph(G_navigation):
 
 
 def build_dual_tree(dual_G):
+    """This function computes
+    the maximum spanning tree
+    for the dual graph (maximum 
+    regarding the dual edge socre)
+
+
+    Parameters
+    ----------
+
+    G_navigation : the mutlidigraph containing the navigation data
+
+
+    Returns
+    -------
+
+    the maximum spanning tree
+
+    """
     tree_edges=nx.maximum_spanning_edges(nx.Graph(dual_G),data=False,weight='score')
     new_edges=[]
     for edge_1,edge_2 in tree_edges:
@@ -1289,6 +1677,25 @@ def build_dual_tree(dual_G):
 
 
 def graph_decomposition(dual_tree):
+    """This function returns a (quasi) partition
+    of the dual edges in the dual tree.
+    The longest path (regarding the score attribute)
+    is computed in the tree and the edges components,
+    along with their opposite, are deleted from 
+    the tree until there is no edges.
+
+    Parameters
+    ----------
+
+    dual_tree : the maximum spanning tree
+
+
+    Returns
+    -------
+
+    a list of paths in the dual graph
+
+    """
     paths,dual_tree_cop=[],dual_tree.copy()
     while(len(dual_tree_cop.nodes())>0):
         path=nx.dag_longest_path(dual_tree_cop, weight='score')
