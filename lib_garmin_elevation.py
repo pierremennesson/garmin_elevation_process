@@ -1240,15 +1240,20 @@ def adjust_curve_elevation(Y,delta_expected):
 
     the perturbated curve
 
+
+
+
     """
     dY=np.diff(Y)
     dY_pos=np.where(dY>=0,dY,0)
     dY_neg=np.where(dY<0,-dY,0)
     delta_pos,delta_neg=np.sum(dY_pos),np.sum(dY_neg)
+    if delta_pos==delta_neg==0:
+        return Y,0.
     alpha=alpha=(delta_expected-(delta_pos-delta_neg))/(delta_pos+delta_neg)
     dY=(1+alpha)*dY_pos-(1-alpha)*dY_neg
-    Y_corr=np.insert(np.cumsum(dY),0,0)
-    return Y_corr+Y[0],delta_pos-delta_neg
+    Y_pertubated=np.insert(np.cumsum(dY),0,0)
+    return Y_pertubated+Y[0],delta_pos-delta_neg
 
 def infer_curve_from_estimated_gradient(intervals,init_elevation=0):
     """This function integrates the piecewise constant derivate
@@ -1342,6 +1347,42 @@ def approximate_elevation_profile(meta_segments,x_min,x_max,
 #ELEVATION DATA RETRIEVAL
 
 
+def get_nodes_elevation(nodes_positions,X,Y,x_min,x_max):
+    """This function estimates the elevations at nodes positions
+    on the metasegment
+
+    Parameters
+    ----------
+
+    nodes_positions : the x-axis coordinates of the nodes
+
+    X : the x-axis coordinates of the estimated elevation profile
+
+    Y : the x-axis coordinates of the estimated elevation profile
+
+    x_min : minimum X value
+
+    x_max : maximum X value
+
+
+
+    Returns
+    -------
+
+    a dictionary nodes_elevation with nodes_elevations[k]=estimated elevation
+    for the node at nodes_positions[k]    
+
+    """
+    nodes_elevations={}
+    for k,pos in enumerate(nodes_positions):
+        if x_min<=pos<=x_max:
+            index=np.where(X<=pos)[0][-1]
+            x1,y1,x2,y2=X[index],Y[index],X[index+1],Y[index+1]
+            elevation=affine(x1,x2,y1,y2)(pos)
+            nodes_elevations[k]=elevation
+    return nodes_elevations
+
+
 
 def collect_elevation_information_from_sub_meta_segments(path,nodes_positions,meta_segments,x_min,x_max,
                                                          intermediate_distance=1000,min_interval_size=100,
@@ -1399,12 +1440,11 @@ def collect_elevation_information_from_sub_meta_segments(path,nodes_positions,me
     if output is not None:
         X,Y=output
         X,Y=np.array(X),np.array(Y)
-        _,_,nodes_elevations=get_piecewise(nodes_positions,X,Y,x_min,x_max)
-        for k,elev in enumerate(nodes_elevations):
-            if elev==elev:
-                if not(nodes[k] in nodes_data.keys()):
-                    nodes_data[nodes[k]]=[]
-                nodes_data[nodes[k]].append(elev)
+        nodes_elevations=get_nodes_elevation(nodes_positions,X,Y,x_min,x_max)
+        for node_index,elev in nodes_elevations.items():
+            if not(nodes[node_index] in nodes_data.keys()):
+                nodes_data[nodes[node_index]]=[]
+            nodes_data[nodes[node_index]].append(elev)
 
         x_min,x_max=np.min(X),np.max(X)
         for k,edge in enumerate(path):
@@ -1427,12 +1467,12 @@ def collect_elevation_information_from_sub_meta_segments(path,nodes_positions,me
 
 
 def collect_elevation_data_from_path(G_navigation,G_osm,path,
-                                    max_id_segment_gap=2,max_time_gap=100.,max_distance_gap=250.,
+                                    max_id_segment_gap=3,max_time_gap=100.,max_distance_gap=250.,
                                     max_delta_T=900,overlap_coeff=0.,harmonizing_step=5.,
                                     discarding_threshold=30.,overlay_threshold=0.25,affine_threshold=2.5,
-                                    correlation_treshold=0.95,min_tree_components=1,min_count=1,
+                                    correlation_treshold=0.99,min_tree_components=1,min_count=2,min_cover_length=500.,
                                     intermediate_distance=1000,min_interval_size=100.,
-                                    min_samples_leaf=25.,min_impurity_decrease=0.25*float('1e-6')):
+                                    min_samples_leaf=25,min_impurity_decrease=0.25*float('1e-6')):
 
     """This function retrieves nodes and edges elevation data along the path in the navigation graph.
     Given a path, we estimate the elevation profile. After retrieving the metasegments, processing them and
@@ -1479,6 +1519,7 @@ def collect_elevation_data_from_path(G_navigation,G_osm,path,
 
     min_count : the minimum number of overlapping meta_segments over a intervalfor it to be considered
 
+    min_cover_length : the minimum length of a cover to approximate the elevation profile on it
 
     intermediate_distance : the distance used to sampled intermediate points at which we compute the median elevations. 
     The greater it is, the more the final curve will be more C0 close but less C1 close to the real elevation profile.
@@ -1525,14 +1566,15 @@ def collect_elevation_data_from_path(G_navigation,G_osm,path,
                     cover,extremities=get_cover(corrected_meta_segments,min_count=min_count)
                     all_nodes_data,all_edges_data={},{}
                     for i,(x_min,x_max) in enumerate(extremities):
-                        sub_meta_segments=[corrected_meta_segments[k] for k in cover[i]]
-                        output=collect_elevation_information_from_sub_meta_segments(path,nodes_positions,meta_segments,x_min,x_max,
-                                                         intermediate_distance=intermediate_distance,min_interval_size=min_interval_size,
-                                                         min_samples_leaf=min_samples_leaf,min_impurity_decrease=min_impurity_decrease)
-                        if output is not None:
-                            nodes_data,edges_data=output
-                            all_nodes_data.update(nodes_data)
-                            all_edges_data.update(edges_data)
+                        if x_max-x_min>min_cover_length:
+                            sub_meta_segments=[corrected_meta_segments[k] for k in cover[i]]
+                            output=collect_elevation_information_from_sub_meta_segments(path,nodes_positions,meta_segments,x_min,x_max,
+                                                             intermediate_distance=intermediate_distance,min_interval_size=min_interval_size,
+                                                             min_samples_leaf=min_samples_leaf,min_impurity_decrease=min_impurity_decrease)
+                            if output is not None:
+                                nodes_data,edges_data=output
+                                all_nodes_data.update(nodes_data)
+                                all_edges_data.update(edges_data)
                     return all_nodes_data,all_edges_data
 
 
