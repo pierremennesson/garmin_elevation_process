@@ -175,7 +175,7 @@ def add_segments(navigation_df):
     return navigation_df
 
 
-def preprocess(file_path,G_osm,max_projection_distance=20,crs=None):
+def preprocess(file_path,G_osm,max_projection_distance=20,crs=None,verbose=True):
     """This function reads a gpx file, convert the geometry
     to UTM coordinates, project its points onto the osm graph edges
     and add useful features (see chapter (I))
@@ -203,14 +203,16 @@ def preprocess(file_path,G_osm,max_projection_distance=20,crs=None):
     navigation_df=get_points_from_activity(file_path)
     navigation_df=navigation_df.drop_duplicates(subset=['geometry'])
     t2=time.time()
-    print('reading file took %f s'%(t2-t1))
+    if verbose:
+        print('reading file took %f s'%(t2-t1))
     
     if crs is None:
         crs=navigation_df.estimate_utm_crs()
         G_osm=ox.project_graph(G_osm,crs)
     navigation_df=navigation_df.to_crs(crs)
     t3=time.time()
-    print('estimating crs took %f s'%(t3-t2))
+    if verbose:
+        print('estimating crs took %f s'%(t3-t2))
 
 
     edges,distances=ox.nearest_edges(G_osm,[pt.x for pt in navigation_df['geometry']],[pt.y for pt in navigation_df['geometry']],return_dist=True)
@@ -221,12 +223,14 @@ def preprocess(file_path,G_osm,max_projection_distance=20,crs=None):
     navigation_df.loc[:,'geometry']=navigation_df.apply(lambda x:nearest_points(x['geometry'],G_osm.get_edge_data(*x['edge'])['geometry'])[1],axis=1)
     navigation_df.loc[:,'edge_coordinate']=navigation_df.apply(lambda x:G_osm.get_edge_data(*x['edge'])['geometry'].project(x['geometry']),axis=1)
     t4=time.time()
-    print('projecting took  %f s'%(t4-t3))
+    if verbose:
+        print('projecting took  %f s'%(t4-t3))
 
 
     navigation_df=add_segments(navigation_df)
     t5=time.time()
-    print('adding segments took %f s'%(t5-t4))
+    if verbose:
+        print('adding segments took %f s'%(t5-t4))
 
     return navigation_df
 
@@ -1417,7 +1421,7 @@ def collect_elevation_information_from_sub_meta_segments(path,nodes_positions,me
                 x-=start
                 if not(edge in edges_data.keys()):
                     edges_data[edge]=[]
-                edges_data[edge].append({'X':x,'Y':y,'cover':(x[-1]-x[0])/(end-start)})
+                edges_data[edge].append({'X':x,'Y':y,'cover':(x[-1]-x[0])/(end-start),'length':x[-1]-x[0]})
 
         return nodes_data,edges_data
 
@@ -1605,7 +1609,7 @@ def edge_score(G_navigation,edge_1,edge_2,max_id_segment_gap=3):
                pre_edge_score(G_navigation,(edge_2[1],edge_2[0],edge_2[2]),(edge_1[1],edge_1[0],edge_1[2]),max_id_segment_gap=max_id_segment_gap))
 
 
-def build_dual_graph(G_navigation):
+def build_dual_graph(G_navigation,max_id_segment_gap=3):
     """This function computes the 
     dual graph of the navigation graph.
     The dual edges between two opposite
@@ -1618,6 +1622,10 @@ def build_dual_graph(G_navigation):
 
     G_navigation : the mutlidigraph containing the navigation data
 
+    max_id_segment_gap : maximum gap autorized between the id of the last 
+    component of a metasegment and the id of the segment comning from the edge to be merged. 
+    Ideally, consecutive segments along a path that should be merged have 
+    consecutive id segments but small projection errors can insert small fake segments in between them.
 
     Returns
     -------
@@ -1635,7 +1643,7 @@ def build_dual_graph(G_navigation):
             to_be_removed.append((edge_2,edge_1))
 
     dual_G.remove_edges_from(to_be_removed)
-    nx.set_edge_attributes(dual_G,{(edge_1,edge_2):{'score':edge_score(G_navigation,edge_1,edge_2)} for edge_1,edge_2 in dual_G.edges()}) 
+    nx.set_edge_attributes(dual_G,{(edge_1,edge_2):{'score':edge_score(G_navigation,edge_1,edge_2,max_id_segment_gap=max_id_segment_gap)} for edge_1,edge_2 in dual_G.edges()}) 
     return dual_G
 
 
