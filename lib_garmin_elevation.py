@@ -1171,50 +1171,7 @@ def get_derivative_intervals(tree,node=0):
         res_2[0][0]=threshold
         return res_1+res_2
 
-def simplify_tree(tree,x_min,x_max,min_interval_size=100,node=0):
-    """This function simplifies the elevation profile estimated by the tree, 
-    in the sense that the intervals on which it is constant should not be 
-    bigger than min_interval_size. We don't want a model learning really
-    small details that are likely to be some noise.
 
-
-    Parameters
-    ----------
-
-    tree : the tree from the DecisionTreeRegressor object
-
-    x_min : the start of the interval on which we estimate the elevation profile
-
-    x_max : the end of the interval on which we estimate the elevation profile
-
-    min_interval_size : the minimum size of an interval for the estimated derivative
-    to be constant on it.
-
-    Returns
-    -------
-
-    a list of triplets (x1,x2,v) meaning that the approximate derivative is constant 
-    on the intervals [x1,x2] with value v 
-
-    """
-    if tree.feature[node] == _tree.TREE_UNDEFINED or x_max-x_min<min_interval_size:
-        return [[x_min,x_max,tree.value[node][0][0]]]
-    else:
-        threshold = tree.threshold[node]
-        res_1=simplify_tree(tree,x_min,threshold,min_interval_size=min_interval_size,node=tree.children_left[node])
-        res_2=simplify_tree(tree,threshold,x_max,min_interval_size=min_interval_size,node=tree.children_right[node])
-        if threshold-x_min<min_interval_size/2:
-            (x1,x2,v1),(xx1,xx2,v2)=res_1[-1],res_2[0]
-            v=(v1*(x2-x1)+v2*(xx2-xx1))/(xx2-x1)
-            res_2[0]=[x1,xx2,v]
-            return res_2
-        elif x_max-threshold<min_interval_size/2:
-            (x1,x2,v1),(xx1,xx2,v2)=res_1[-1],res_2[0]
-            v=(v1*(x2-x1)+v2*(xx2-xx1))/(xx2-x1)
-            res_1[-1]=[x1,xx2,v]
-            return res_1
-        else:
-            return res_1+res_2
 
 
 
@@ -1284,8 +1241,7 @@ def infer_curve_from_estimated_gradient(intervals,init_elevation=0):
     X.append(x2)
     return X,Y
 
-def approximate_elevation_profile(meta_segments,x_min,x_max,
-                                 intermediate_distance=1000,min_interval_size=100,
+def approximate_elevation_profile(meta_segments,x_min,x_max,intermediate_distance=1000,
                                  min_samples_leaf=25,min_impurity_decrease=0.25*float('1e-6')):
 
     """This function estimates the elevation profile on the [x_min,x_max] intervals
@@ -1307,9 +1263,6 @@ def approximate_elevation_profile(meta_segments,x_min,x_max,
     we compute the median elevations. The greater it is, the more the final curve will
     be more C0 close but less C1 close to the real elevation profile.
 
-    min_interval_size : the minimum size of an interval for the estimated derivative
-    to be constant on it.
-
     min_samples_leaf : min_samplees_leaf for the DecisionTreeRegressor object
 
     min_impurity_decrease : min_impurity_decrease for the DecisionTreeRegressor object
@@ -1324,24 +1277,28 @@ def approximate_elevation_profile(meta_segments,x_min,x_max,
 
     intermediate_points=np.linspace(x_min,x_max,max(round((x_max-x_min)/intermediate_distance)+1,2))
     intermediate_elevations=get_intermediate_elevation(intermediate_points,meta_segments)
-    output=approximate_derivative(meta_segments,x_min=x_min,x_max=x_max,
-                                  min_samples_leaf=min_samples_leaf,
-                                  min_impurity_decrease=min_impurity_decrease)
-    if output is None:
-        return None
-    _,_,model=output
-    intervals=simplify_tree(model.tree_,x_min,x_max,min_interval_size=min_interval_size)
     X,Y=[],[]
+
+
     for k in range(len(intermediate_points)-1):
-        sub_intervals=[[min(max(x1,intermediate_points[k]),intermediate_points[k+1]),min(max(x2,intermediate_points[k]),intermediate_points[k+1]),v] 
-                                        for x1,x2,v in intervals if x2>=intermediate_points[k] and x1<=intermediate_points[k+1]]
-        x,y=infer_curve_from_estimated_gradient(sub_intervals,np.nanmedian(intermediate_elevations[k]))
-        delta_expected=np.nanmedian(intermediate_elevations[k+1])-np.nanmedian(intermediate_elevations[k])
-        y,_=adjust_curve_elevation(y,delta_expected)
-        X+=x[:-1]
-        Y+=list(y[:-1])
+        x1,x2=intermediate_points[k],intermediate_points[k+1]
+        output=approximate_derivative(meta_segments,x_min=x1,x_max=x2,
+                                      min_samples_leaf=min_samples_leaf,
+                                      min_impurity_decrease=min_impurity_decrease)
+
+        if output is not None:
+            _,_,model=output
+            intervals=get_derivative_intervals(model.tree_)
+            intervals[0][0]=x1
+            intervals[-1][1]=x2
+            x,y=infer_curve_from_estimated_gradient(intervals,np.nanmedian(intermediate_elevations[k]))
+            delta_expected=np.nanmedian(intermediate_elevations[k+1])-np.nanmedian(intermediate_elevations[k])
+            y,_=adjust_curve_elevation(y,delta_expected)
+            X+=x[:-1]
+            Y+=list(y[:-1])
     X.append(x[-1])
     Y.append(y[-1])
+
     return X,Y
 
 #ELEVATION DATA RETRIEVAL
@@ -1385,8 +1342,8 @@ def get_nodes_elevation(nodes_positions,X,Y,x_min,x_max):
 
 
 def collect_elevation_information_from_sub_meta_segments(path,nodes_positions,meta_segments,x_min,x_max,
-                                                         intermediate_distance=1000,min_interval_size=100,
-                                                         min_samples_leaf=25,min_impurity_decrease=0.25*float('1e-6')):
+                                                         intermediate_distance=1000,min_samples_leaf=25,
+                                                         min_impurity_decrease=0.25*float('1e-6')):
 
     """This function retrieves nodes and edges elevation data along a the portion of the path comprised between x_min and x_max
     in the navigation graph.
@@ -1412,9 +1369,6 @@ def collect_elevation_information_from_sub_meta_segments(path,nodes_positions,me
     we compute the median elevations. The greater it is, the more the final curve will
     be more C0 close but less C1 close to the real elevation profile.
 
-    min_interval_size : the minimum size of an interval for the estimated derivative
-    to be constant on it.
-
     min_samples_leaf : min_samplees_leaf for the DecisionTreeRegressor object
 
     min_impurity_decrease : min_impurity_decrease for the DecisionTreeRegressor object
@@ -1434,8 +1388,7 @@ def collect_elevation_information_from_sub_meta_segments(path,nodes_positions,me
     nodes=[edge[0] for edge in path]+[path[-1][1]]
     nodes_data,edges_data={},{}
 
-    output=approximate_elevation_profile(meta_segments,x_min,x_max,
-                                         intermediate_distance=intermediate_distance,min_interval_size=min_interval_size,
+    output=approximate_elevation_profile(meta_segments,x_min,x_max,intermediate_distance=intermediate_distance,
                                          min_samples_leaf=min_samples_leaf,min_impurity_decrease=min_impurity_decrease)
     if output is not None:
         X,Y=output
@@ -1471,8 +1424,7 @@ def collect_elevation_data_from_path(G_navigation,G_osm,path,
                                     max_delta_T=900,overlap_coeff=0.,harmonizing_step=5.,
                                     discarding_threshold=30.,overlay_threshold=0.25,affine_threshold=2.5,
                                     correlation_treshold=0.99,min_tree_components=1,min_count=2,min_cover_length=500.,
-                                    intermediate_distance=1000,min_interval_size=100.,
-                                    min_samples_leaf=25,min_impurity_decrease=0.25*float('1e-6')):
+                                    intermediate_distance=1000,min_samples_leaf=25,min_impurity_decrease=0.25*float('1e-6')):
 
     """This function retrieves nodes and edges elevation data along the path in the navigation graph.
     Given a path, we estimate the elevation profile. After retrieving the metasegments, processing them and
@@ -1524,9 +1476,6 @@ def collect_elevation_data_from_path(G_navigation,G_osm,path,
     intermediate_distance : the distance used to sampled intermediate points at which we compute the median elevations. 
     The greater it is, the more the final curve will be more C0 close but less C1 close to the real elevation profile.
 
-    min_interval_size : the minimum size of an interval for the estimated derivative
-    to be constant on it.
-
     min_samples_leaf : min_samplees_leaf for the DecisionTreeRegressor object
 
     min_impurity_decrease : min_impurity_decrease for the DecisionTreeRegressor object
@@ -1569,8 +1518,8 @@ def collect_elevation_data_from_path(G_navigation,G_osm,path,
                         if x_max-x_min>min_cover_length:
                             sub_meta_segments=[corrected_meta_segments[k] for k in cover[i]]
                             output=collect_elevation_information_from_sub_meta_segments(path,nodes_positions,meta_segments,x_min,x_max,
-                                                             intermediate_distance=intermediate_distance,min_interval_size=min_interval_size,
-                                                             min_samples_leaf=min_samples_leaf,min_impurity_decrease=min_impurity_decrease)
+                                                             intermediate_distance=intermediate_distance,min_samples_leaf=min_samples_leaf,
+                                                             min_impurity_decrease=min_impurity_decrease)
                             if output is not None:
                                 nodes_data,edges_data=output
                                 all_nodes_data.update(nodes_data)

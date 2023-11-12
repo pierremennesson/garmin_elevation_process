@@ -15,7 +15,7 @@ save_navigation_data=False
 
 max_line_length=float('inf')
 max_projection_distance=20,
-max_id_segment_gap=3
+max_id_segment_gap=2
 max_time_gap=100.
 max_distance_gap=250.
 max_delta_T=float('inf')
@@ -23,15 +23,14 @@ overlap_coeff=0.
 harmonizing_step=5.
 discarding_threshold=30.
 overlay_threshold=0.25
-affine_threshold=0.
-correlation_treshold=0.99
+affine_threshold=2.5
+correlation_treshold=0.9
 min_tree_components=1
 min_count=2
 min_cover_length=2000.
-intermediate_distance=1000
-min_interval_size=100.
-min_samples_leaf=25
-min_impurity_decrease=0.5*float('1e-6')
+intermediate_distance=2500
+min_samples_leaf=50
+min_impurity_decrease=0.5*float('1e-5')
 
 nodes_elevation_data_path='./nodes_elevation_data.p'
 edges_elevation_data_path='./edges_elevation_data.p'
@@ -90,7 +89,7 @@ if __name__ == "__main__":
 	                            max_delta_T=max_delta_T,overlap_coeff=overlap_coeff,harmonizing_step=harmonizing_step,
 	                            discarding_threshold=discarding_threshold,overlay_threshold=overlay_threshold,affine_threshold=affine_threshold,
 	                            correlation_treshold=correlation_treshold,min_tree_components=min_tree_components,min_count=min_count,
-	                            min_cover_length=min_cover_length,intermediate_distance=intermediate_distance,min_interval_size=min_interval_size,
+	                            min_cover_length=min_cover_length,intermediate_distance=intermediate_distance,
 	                            min_samples_leaf=min_samples_leaf,min_impurity_decrease=min_impurity_decrease)
 		if output is not None:
 		    nodes_data,edges_data=output
