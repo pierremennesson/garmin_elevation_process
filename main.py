@@ -28,9 +28,9 @@ correlation_treshold=0.9
 min_tree_components=1
 min_count=2
 min_cover_length=2000.
-intermediate_distance=2500
-min_samples_leaf=50
-min_impurity_decrease=0.5*float('1e-5')
+intermediate_distance=1500
+min_samples_leaf=25
+min_impurity_decrease=0.66*float('1e-5')
 
 nodes_elevation_data_path='./nodes_elevation_data.p'
 edges_elevation_data_path='./edges_elevation_data.p'
